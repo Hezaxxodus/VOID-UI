@@ -3,8 +3,355 @@ local ts = game:GetService("TweenService")
 local UIS = game:GetService("UserInputService")
 local Run = game:GetService("RunService")
 local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
+
+local WEBHOOK_FILE = "void_webhook.txt"
+
+local function saveWebhook(url)
+    _G.SavedWebhook = url
+    pcall(function()
+        writefile(WEBHOOK_FILE, url)
+    end)
+end
+
+local function loadWebhook()
+    if _G.SavedWebhook and _G.SavedWebhook ~= "" then
+        return _G.SavedWebhook
+    end
+    local ok, data = pcall(function()
+        return readfile(WEBHOOK_FILE)
+    end)
+    if ok and data and data ~= "" then
+        return data
+    end
+    return ""
+end
+
+local webhookUrl = loadWebhook()
+
 local function getRoot() return player.Character and player.Character:FindFirstChild("HumanoidRootPart") end
 local function getHumanoid() return player.Character and player.Character:FindFirstChildOfClass("Humanoid") end
+
+-- NOTIFIER
+
+local Players = game:GetService("Players")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+local DETECT_RADIUS = 90
+local CARD_HEIGHT = 100
+local CARD_GAP = 6
+
+local BONE_NAMES = {
+    "SaintsRightLeg",
+    "SaintsRightArm",
+    "SaintsRibcage",
+    "SaintsLeftLeg",
+    "SaintsLeftArm",
+    "SaintsHeart",
+}
+
+local SPAWNS = {
+    { name = "Waterfall",      pos = Vector3.new(-1756.30,  58.40, -2983.90) },
+    { name = "Death Valley",   pos = Vector3.new(-4413.67,  45.26, -1976.08) },
+    { name = "Ncantu Canyons", pos = Vector3.new(-4012.15,  45.00, -2796.99) },
+    { name = "Finely",         pos = Vector3.new(-4193.25,  46.35, -3996.52) },
+    { name = "Abandoned Town", pos = Vector3.new(-4112.13,  64.75, -4981.27) },
+    { name = "Outlaw Hills",   pos = Vector3.new(-3805.14, 242.55, -6008.41) },
+    { name = "Bridge",         pos = Vector3.new(-7776.41,  46.77, -4476.99) },
+    { name = "Greenlands",     pos = Vector3.new(-7962.14,  58.91, -3255.20) },
+    { name = "Greenlands",     pos = Vector3.new(-8022.02,  67.38, -2838.21) },
+}
+
+local BONE_LABELS = {
+    SaintsRightLeg = "Saints Right Leg",
+    SaintsRightArm = "Saints Right Arm",
+    SaintsRibcage  = "Saints Ribcage",
+    SaintsLeftLeg  = "Saints Left Leg",
+    SaintsLeftArm  = "Saints Left Arm",
+    SaintsHeart    = "Saints Heart",
+}
+
+local function sendToDiscord(boneName, spawnName)
+    if webhookUrl == "" then return end
+
+    local boneLabel = BONE_LABELS[boneName] or boneName
+
+    local data = {
+        username = "Bone Notifier",
+        embeds = {
+            {
+                title = "Corpse Found",
+                color = 0xF0B132,
+                fields = {
+                    { name = "Bone", value = boneLabel, inline = true },
+                    { name = "Location", value = spawnName, inline = true },
+                },
+                footer = { text = "VOID UI • Bone Notifier" },
+                timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+            }
+        }
+    }
+
+    local jsonData = HttpService:JSONEncode(data)
+    local headers = {["Content-Type"] = "application/json"}
+
+    task.spawn(function()
+        pcall(function()
+            local request = syn and syn.request or http_request or request
+            if request then
+                request({ Url = webhookUrl, Method = "POST", Headers = headers, Body = jsonData })
+            end
+        end)
+    end)
+end
+
+local function sendTestWebhook()
+    if webhookUrl == "" then return end
+
+    local data = {
+        username = "Bone Notifier",
+        embeds = {
+            {
+                title = "Bone!",
+                color = 0x2ECC71,
+                footer = { text = "VOID UI • Bone Notifier" },
+                timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+            }
+        }
+    }
+
+    local jsonData = HttpService:JSONEncode(data)
+    local headers = {["Content-Type"] = "application/json"}
+
+    task.spawn(function()
+        pcall(function()
+            local request = syn and syn.request or http_request or request
+            if request then
+                request({ Url = webhookUrl, Method = "POST", Headers = headers, Body = jsonData })
+            end
+        end)
+    end)
+end
+
+if playerGui:FindFirstChild("CorpseNotifier") then
+    playerGui:FindFirstChild("CorpseNotifier"):Destroy()
+end
+
+local sg = Instance.new("ScreenGui")
+sg.Name = "CorpseNotifier"
+sg.ResetOnSpawn = false
+sg.Parent = playerGui
+
+local activeNotifs = {}
+local notifOrder = {}
+
+local function rebuildPositions()
+    for i, key in ipairs(notifOrder) do
+        local data = activeNotifs[key]
+        if data and data.frame then
+            data.frame.Position = UDim2.new(0, 12, 0, 12 + (i - 1) * (CARD_HEIGHT + CARD_GAP))
+        end
+    end
+end
+
+local function getBillboardParent(obj)
+    if obj:IsA("BasePart") then return obj end
+    if obj:IsA("Model") then
+        if obj.PrimaryPart then return obj.PrimaryPart end
+        for _, child in ipairs(obj:GetChildren()) do
+            if child:IsA("BasePart") then return child end
+        end
+    end
+    return nil
+end
+
+local function removeCard(key)
+    local data = activeNotifs[key]
+    if not data then return end
+    if data.frame then data.frame:Destroy() end
+    if data.espGui then pcall(function() data.espGui:Destroy() end) end
+    if data.connection then data.connection:Disconnect() end
+    activeNotifs[key] = nil
+    for i, k in ipairs(notifOrder) do
+        if k == key then
+            table.remove(notifOrder, i)
+            break
+        end
+    end
+    rebuildPositions()
+end
+
+local seen = {}
+
+local function createCard(boneName, spawnName, bonePos, boneObj)
+    local key = spawnName .. "|" .. boneName
+    if seen[key] then return end
+	sendToDiscord(boneName, spawnName)
+    seen[key] = true
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 240, 0, CARD_HEIGHT)
+    frame.Position = UDim2.new(0, 12, 0, 12)
+    frame.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
+    frame.BackgroundTransparency = 0.1
+    frame.BorderSizePixel = 0
+    frame.Parent = sg
+
+    local frameCorner = Instance.new("UICorner")
+    frameCorner.CornerRadius = UDim.new(0, 10)
+    frameCorner.Parent = frame
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(180, 180, 180)
+    stroke.Thickness = 2
+    stroke.Parent = frame
+
+    local titleLbl = Instance.new("TextLabel")
+    titleLbl.Size = UDim2.new(1, -16, 0, 22)
+    titleLbl.Position = UDim2.new(0, 10, 0, 6)
+    titleLbl.BackgroundTransparency = 1
+    titleLbl.Text = "CORPSE"
+    titleLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+    titleLbl.TextSize = 14
+    titleLbl.Font = Enum.Font.GothamBold
+    titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+    titleLbl.Parent = frame
+
+    local boneLbl = Instance.new("TextLabel")
+    boneLbl.Size = UDim2.new(1, -16, 0, 18)
+    boneLbl.Position = UDim2.new(0, 10, 0, 30)
+    boneLbl.BackgroundTransparency = 1
+    boneLbl.Text = (BONE_LABELS[boneName] or boneName)
+    boneLbl.TextColor3 = Color3.fromRGB(210, 210, 210)
+    boneLbl.TextSize = 12
+    boneLbl.Font = Enum.Font.GothamBold
+    boneLbl.TextXAlignment = Enum.TextXAlignment.Left
+    boneLbl.Parent = frame
+
+    local locLbl = Instance.new("TextLabel")
+    locLbl.Size = UDim2.new(1, -16, 0, 18)
+    locLbl.Position = UDim2.new(0, 10, 0, 50)
+    locLbl.BackgroundTransparency = 1
+    locLbl.Text = spawnName
+    locLbl.TextColor3 = Color3.fromRGB(140, 140, 140)
+    locLbl.TextSize = 11
+    locLbl.Font = Enum.Font.Gotham
+    locLbl.TextXAlignment = Enum.TextXAlignment.Left
+    locLbl.Parent = frame
+
+    local tpBtn = Instance.new("TextButton")
+    tpBtn.Size = UDim2.new(0, 60, 0, 22)
+    tpBtn.Position = UDim2.new(0, 10, 0, 70)
+    tpBtn.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
+    tpBtn.BorderSizePixel = 0
+    tpBtn.Text = "TP"
+    tpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    tpBtn.TextSize = 12
+    tpBtn.Font = Enum.Font.GothamBold
+    tpBtn.Parent = frame
+
+    local tpCorner = Instance.new("UICorner")
+    tpCorner.CornerRadius = UDim.new(0, 6)
+    tpCorner.Parent = tpBtn
+
+    local bottomLine = Instance.new("Frame")
+    bottomLine.Size = UDim2.new(1, -12, 0, 2)
+    bottomLine.Position = UDim2.new(0, 6, 1, -5)
+    bottomLine.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+    bottomLine.BorderSizePixel = 0
+    bottomLine.Parent = frame
+
+    local bottomLineCorner = Instance.new("UICorner")
+    bottomLineCorner.CornerRadius = UDim.new(1, 0)
+    bottomLineCorner.Parent = bottomLine
+
+    tpBtn.MouseButton1Click:Connect(function()
+        local character = player.Character
+        if character then
+            local root = character:FindFirstChild("HumanoidRootPart")
+            if root then
+                root.CFrame = CFrame.new(bonePos + Vector3.new(0, 5, 0))
+            end
+        end
+    end)
+
+    local espGui = nil
+    local billboardParent = getBillboardParent(boneObj)
+    if billboardParent then
+        espGui = Instance.new("BillboardGui")
+        espGui.Size = UDim2.new(0, 140, 0, 28)
+        espGui.StudsOffset = Vector3.new(0, 4, 0)
+        espGui.AlwaysOnTop = true
+        espGui.Parent = billboardParent
+
+        local espLabel = Instance.new("TextLabel")
+        espLabel.Size = UDim2.new(1, 0, 1, 0)
+        espLabel.BackgroundTransparency = 1
+        espLabel.Text = (BONE_LABELS[boneName] or boneName)
+        espLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+        espLabel.TextStrokeTransparency = 0
+        espLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        espLabel.TextSize = 14
+        espLabel.Font = Enum.Font.GothamBold
+        espLabel.Parent = espGui
+    end
+
+    local connection = boneObj.AncestryChanged:Connect(function(_, newParent)
+        if newParent == nil then
+            seen[key] = nil
+            removeCard(key)
+        end
+    end)
+
+    activeNotifs[key] = { frame = frame, espGui = espGui, connection = connection }
+    table.insert(notifOrder, key)
+    rebuildPositions()
+end
+
+local boneSet = {}
+for _, v in ipairs(BONE_NAMES) do
+    boneSet[v] = true
+end
+
+local function getPos(obj)
+    local ok, result = pcall(function()
+        if obj:IsA("BasePart") then
+            return obj.Position
+        elseif obj:IsA("Model") then
+            if obj.PrimaryPart then
+                return obj.PrimaryPart.Position
+            end
+            return obj:GetModelCFrame().Position
+        end
+        return nil
+    end)
+    if ok then return result end
+    return nil
+end
+
+local function onDescendantAdded(obj)
+    if not boneSet[obj.Name] then return end
+    local p = getPos(obj)
+    if not p then return end
+    for _, sp in ipairs(SPAWNS) do
+        if (p - sp.pos).Magnitude <= DETECT_RADIUS then
+            createCard(obj.Name, sp.name, p, obj)
+        end
+    end
+end
+
+workspace.DescendantAdded:Connect(onDescendantAdded)
+
+for _, obj in ipairs(workspace:GetDescendants()) do
+    if boneSet[obj.Name] then
+        onDescendantAdded(obj)
+    end
+end
+
+-- NOTIFIER 
+
 local P = {
     base = Color3.fromRGB(6,6,6),
     surface = Color3.fromRGB(14,14,14),
@@ -1449,6 +1796,112 @@ game.Players.PlayerRemoving:Connect(function(p)
     refreshSpectateList()
 end)
 task.delay(1, refreshSpectateList)
+
+local webhookSection = Instance.new("Frame")
+webhookSection.Size = UDim2.new(1, 0, 0, 20)
+webhookSection.BackgroundTransparency = 1
+webhookSection.BorderSizePixel = 0
+webhookSection.LayoutOrder = 6
+webhookSection.Parent = morePage
+local webhookSectionLbl = Instance.new("TextLabel", webhookSection)
+webhookSectionLbl.Size = UDim2.new(1, 0, 1, 0)
+webhookSectionLbl.BackgroundTransparency = 1
+webhookSectionLbl.Text = "WEBHOOK"
+webhookSectionLbl.TextColor3 = P.muted
+webhookSectionLbl.TextSize = 10
+webhookSectionLbl.Font = Enum.Font.GothamBold
+webhookSectionLbl.TextXAlignment = Enum.TextXAlignment.Left
+
+local webhookRow = Instance.new("Frame")
+webhookRow.Size = UDim2.new(1, 0, 0, 44)
+webhookRow.BackgroundTransparency = 1
+webhookRow.BorderSizePixel = 0
+webhookRow.LayoutOrder = 7
+webhookRow.Parent = morePage
+
+local webhookBg = Instance.new("Frame")
+webhookBg.Size = UDim2.new(1, 0, 1, 0)
+webhookBg.BackgroundColor3 = P.surface
+webhookBg.BorderSizePixel = 0
+webhookBg.Parent = webhookRow
+applyCorner(webhookBg, 9)
+applyStroke(webhookBg, P.border, 1)
+
+local webhookIcon = Instance.new("TextLabel")
+webhookIcon.Size = UDim2.new(0, 55, 1, 0)
+webhookIcon.Position = UDim2.new(0, 8, 0, 0)
+webhookIcon.BackgroundTransparency = 1
+webhookIcon.Text = "Webhook"
+webhookIcon.TextColor3 = P.offWhite
+webhookIcon.TextSize = 12
+webhookIcon.Font = Enum.Font.GothamBold
+webhookIcon.TextXAlignment = Enum.TextXAlignment.Left
+webhookIcon.Parent = webhookBg
+
+local webhookInput = Instance.new("TextBox")
+webhookInput.Size = UDim2.new(0, 170, 0, 28)
+webhookInput.Position = UDim2.new(0, 75, 0.5, -14)
+webhookInput.BackgroundColor3 = P.elevated
+webhookInput.Text = ""
+webhookInput.PlaceholderText = "Webhook URL"
+webhookInput.PlaceholderColor3 = P.muted
+webhookInput.TextColor3 = P.white
+webhookInput.TextSize = 10
+webhookInput.Font = Enum.Font.Gotham
+webhookInput.BorderSizePixel = 0
+webhookInput.ClearTextOnFocus = false
+webhookInput.ClipsDescendants = true
+webhookInput.TextXAlignment = Enum.TextXAlignment.Left
+webhookInput.Parent = webhookBg
+applyCorner(webhookInput, 5)
+applyStroke(webhookInput, P.border, 1)
+local webhookInputPad = Instance.new("UIPadding")
+webhookInputPad.PaddingLeft = UDim.new(0, 6)
+webhookInputPad.PaddingRight = UDim.new(0, 6)
+webhookInputPad.Parent = webhookInput
+
+local webhookStatus = Instance.new("TextLabel")
+webhookStatus.Size = UDim2.new(0, 30, 0, 28)
+webhookStatus.Position = UDim2.new(1, -38, 0.5, -14)
+webhookStatus.BackgroundColor3 = P.elevated
+webhookStatus.Text = "*"
+webhookStatus.TextColor3 = P.muted
+webhookStatus.TextSize = 18
+webhookStatus.Font = Enum.Font.GothamBold
+webhookStatus.TextXAlignment = Enum.TextXAlignment.Center
+webhookStatus.Parent = webhookBg
+applyCorner(webhookStatus, 5)
+applyStroke(webhookStatus, P.border, 1)
+
+webhookInput.FocusLost:Connect(function(enterPressed)
+    if enterPressed then
+        local url = webhookInput.Text
+        if url ~= "" and (string.find(url, "discord.com/api/webhooks") or string.find(url, "discordapp.com/api/webhooks")) then
+            webhookUrl = url
+            saveWebhook(url)
+            webhookStatus.Text = "*"
+            webhookStatus.BackgroundColor3 = P.accentBg
+            webhookStatus.TextColor3 = P.white
+            setStroke(webhookStatus, P.white, 1.5)
+            sendTestWebhook()
+        else
+            webhookUrl = ""
+            saveWebhook("")
+            webhookStatus.Text = "*"
+            webhookStatus.BackgroundColor3 = P.elevated
+            webhookStatus.TextColor3 = P.muted
+            setStroke(webhookStatus, P.border, 1)
+        end
+    end
+end)
+
+if webhookUrl ~= "" then
+    webhookStatus.Text = "*"
+    webhookStatus.BackgroundColor3 = P.accentBg
+    webhookStatus.TextColor3 = P.white
+    setStroke(webhookStatus, P.white, 1.5)
+end
+
 local dragging, dragStart, startPos
 header.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
