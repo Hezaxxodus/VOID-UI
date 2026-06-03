@@ -1608,91 +1608,11 @@ end
 snifferBtn.MouseEnter:Connect(function() tw(snifferBtn, {BackgroundColor3 = snifferEnabled and P.accentBg or P.elevated}, 0.1) end)
 snifferBtn.MouseLeave:Connect(function() tw(snifferBtn, {BackgroundColor3 = snifferEnabled and P.accentBg or P.surface}, 0.1) end)
 snifferBtn.MouseButton1Click:Connect(function() sfx:Play() setSniffer(not snifferEnabled) end)
-local autoClickSection = Instance.new("Frame")
-autoClickSection.Size = UDim2.new(1, 0, 0, 20)
-autoClickSection.BackgroundTransparency = 1
-autoClickSection.BorderSizePixel = 0
-autoClickSection.LayoutOrder = 3
-autoClickSection.Parent = morePage
-local autoClickSectionLbl = Instance.new("TextLabel", autoClickSection)
-autoClickSectionLbl.Size = UDim2.new(1, 0, 1, 0)
-autoClickSectionLbl.BackgroundTransparency = 1
-autoClickSectionLbl.Text = "AUTO CLICKER"
-autoClickSectionLbl.TextColor3 = P.muted
-autoClickSectionLbl.TextSize = 10
-autoClickSectionLbl.Font = Enum.Font.GothamBold
-autoClickSectionLbl.TextXAlignment = Enum.TextXAlignment.Left
-local autoClickRow = Instance.new("Frame")
-autoClickRow.Size = UDim2.new(1, 0, 0, 44)
-autoClickRow.BackgroundTransparency = 1
-autoClickRow.BorderSizePixel = 0
-autoClickRow.LayoutOrder = 4
-autoClickRow.Parent = morePage
-local autoClickBtn = Instance.new("TextButton")
-autoClickBtn.Size = UDim2.new(1, 0, 1, 0)
-autoClickBtn.BackgroundColor3 = P.surface
-autoClickBtn.Text = ""
-autoClickBtn.BorderSizePixel = 0
-autoClickBtn.Parent = autoClickRow
-applyCorner(autoClickBtn, 9)
-applyStroke(autoClickBtn, P.border, 1)
-local autoClickLbl = Instance.new("TextLabel")
-autoClickLbl.Size = UDim2.new(1, -80, 1, 0)
-autoClickLbl.Position = UDim2.new(0, 14, 0, 0)
-autoClickLbl.BackgroundTransparency = 1
-autoClickLbl.Text = "Auto Clicker"
-autoClickLbl.TextColor3 = P.offWhite
-autoClickLbl.TextSize = 13
-autoClickLbl.Font = Enum.Font.GothamBold
-autoClickLbl.TextXAlignment = Enum.TextXAlignment.Left
-autoClickLbl.Parent = autoClickBtn
-local autoClickStatus = Instance.new("TextLabel")
-autoClickStatus.Size = UDim2.new(0, 36, 0, 20)
-autoClickStatus.Position = UDim2.new(1, -42, 0.5, -10)
-autoClickStatus.BackgroundColor3 = P.elevated
-autoClickStatus.Text = "OFF"
-autoClickStatus.TextColor3 = P.muted
-autoClickStatus.TextSize = 9
-autoClickStatus.Font = Enum.Font.GothamBold
-autoClickStatus.Parent = autoClickBtn
-applyCorner(autoClickStatus, 4)
-applyStroke(autoClickStatus, P.border, 1)
-addBindLabel(autoClickBtn)
-local autoClickEnabled = false
-local autoClickThread = nil
-local function setAutoClicker(on)
-    autoClickEnabled = on
-    if on then
-        tw(autoClickBtn, {BackgroundColor3 = P.accentBg}, 0.2)
-        setStroke(autoClickBtn, P.white, 1.5)
-        tw(autoClickLbl, {TextColor3 = P.white}, 0.2)
-        autoClickStatus.Text = "ON"
-        tw(autoClickStatus, {BackgroundColor3 = P.accentBg, TextColor3 = P.white}, 0.15)
-        autoClickThread = task.spawn(function()
-            local mouse = player:GetMouse()
-            while autoClickEnabled do
-                mouse1click()
-                task.wait(0.06)
-            end
-        end)
-    else
-        autoClickEnabled = false
-        if autoClickThread then task.cancel(autoClickThread) autoClickThread = nil end
-        tw(autoClickBtn, {BackgroundColor3 = P.surface}, 0.2)
-        setStroke(autoClickBtn, P.border, 1)
-        tw(autoClickLbl, {TextColor3 = P.offWhite}, 0.2)
-        autoClickStatus.Text = "OFF"
-        tw(autoClickStatus, {BackgroundColor3 = P.elevated, TextColor3 = P.muted}, 0.15)
-    end
-end
-btnActions[autoClickBtn] = function() sfx:Play() setAutoClicker(not autoClickEnabled) end
-autoClickBtn.MouseButton1Click:Connect(function() btnActions[autoClickBtn]() end)
-autoClickBtn.MouseButton2Click:Connect(function() startBind(autoClickBtn) end)
 local spectateSection = Instance.new("Frame")
 spectateSection.Size = UDim2.new(1, 0, 0, 20)
 spectateSection.BackgroundTransparency = 1
 spectateSection.BorderSizePixel = 0
-spectateSection.LayoutOrder = 5
+spectateSection.LayoutOrder = 3
 spectateSection.Parent = morePage
 local spectateSectionLbl = Instance.new("TextLabel", spectateSection)
 spectateSectionLbl.Size = UDim2.new(1, 0, 1, 0)
@@ -1706,7 +1626,7 @@ local spectateRow = Instance.new("Frame")
 spectateRow.Size = UDim2.new(1, 0, 0, 110)
 spectateRow.BackgroundTransparency = 1
 spectateRow.BorderSizePixel = 0
-spectateRow.LayoutOrder = 6
+spectateRow.LayoutOrder = 4
 spectateRow.Parent = morePage
 local spectateOuter = Instance.new("Frame")
 spectateOuter.Size = UDim2.new(1, 0, 1, 0)
@@ -1736,7 +1656,7 @@ spectateStatus.TextColor3 = P.muted
 spectateStatus.TextSize = 10
 spectateStatus.Font = Enum.Font.Gotham
 spectateStatus.TextXAlignment = Enum.TextXAlignment.Left
-spectateStatus.LayoutOrder = 6
+spectateStatus.LayoutOrder = 5
 spectateStatus.Parent = morePage
 local spectateTarget = nil
 local spectateConn = nil
@@ -1881,7 +1801,7 @@ local webhookSection = Instance.new("Frame")
 webhookSection.Size = UDim2.new(1, 0, 0, 20)
 webhookSection.BackgroundTransparency = 1
 webhookSection.BorderSizePixel = 0
-webhookSection.LayoutOrder = 7
+webhookSection.LayoutOrder = 6
 webhookSection.Parent = morePage
 local webhookSectionLbl = Instance.new("TextLabel", webhookSection)
 webhookSectionLbl.Size = UDim2.new(1, 0, 1, 0)
@@ -1896,7 +1816,7 @@ local webhookRow = Instance.new("Frame")
 webhookRow.Size = UDim2.new(1, 0, 0, 44)
 webhookRow.BackgroundTransparency = 1
 webhookRow.BorderSizePixel = 0
-webhookRow.LayoutOrder = 8
+webhookRow.LayoutOrder = 7
 webhookRow.Parent = morePage
 
 local webhookBg = Instance.new("Frame")
